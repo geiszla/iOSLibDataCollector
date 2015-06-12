@@ -1,0 +1,206 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+
+namespace iOSLibDataCollector.LibIMobileDevice
+{
+    class AFC
+    {
+        internal enum AFCError
+        {
+            AFC_E_SUCCESS = 0,
+            AFC_E_UNKNOWN_ERROR = 1,
+            AFC_E_OP_HEADER_INVALID = 2,
+            AFC_E_NO_RESOURCES = 3,
+            AFC_E_READ_ERROR = 4,
+            AFC_E_WRITE_ERROR = 5,
+            AFC_E_UNKNOWN_PACKET_TYPE = 6,
+            AFC_E_INVALID_ARG = 7,
+            AFC_E_OBJECT_NOT_FOUND = 8,
+            AFC_E_OBJECT_IS_DIR = 9,
+            AFC_E_PERM_DENIED = 10,
+            AFC_E_SERVICE_NOT_CONNECTED = 11,
+            AFC_E_OP_TIMEOUT = 12,
+            AFC_E_TOO_MUCH_DATA = 13,
+            AFC_E_END_OF_DATA = 14,
+            AFC_E_OP_NOT_SUPPORTED = 15,
+            AFC_E_OBJECT_EXISTS = 16,
+            AFC_E_OBJECT_BUSY = 17,
+            AFC_E_NO_SPACE_LEFT = 18,
+            AFC_E_OP_WOULD_BLOCK = 19,
+            AFC_E_IO_ERROR = 20,
+            AFC_E_OP_INTERRUPTED = 21,
+            AFC_E_OP_IN_PROGRESS = 22,
+            AFC_E_INTERNAL_ERROR = 23,
+            AFC_E_MUX_ERROR = 30,
+            AFC_E_NO_MEM = 31,
+            AFC_E_NOT_ENOUGH_DATA = 32,
+            AFC_E_DIR_NOT_EMPTY = 33,
+            AFC_E_FORCE_SIGNED_TYPE = -1
+        }
+        internal enum FileOpenMode
+        {
+            AFC_FOPEN_RDONLY = 0x00000001,
+            AFC_FOPEN_RW = 0x00000002,
+            AFC_FOPEN_WRONLY = 0x00000003,
+            AFC_FOPEN_WR = 0x00000004,
+            AFC_FOPEN_APPEND = 0x00000005,
+            AFC_FOPEN_RDAPPEND = 0x00000006
+        }
+
+        static string photoDatabasePath;
+
+        #region DllImport
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_client_start_service(IntPtr device, out IntPtr client, string label);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern AFCError afc_read_directory(IntPtr client, string path, out IntPtr directoryInfo);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_get_file_info(IntPtr client, string fileName, out IntPtr fileInfo);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_file_open(IntPtr client, string fileName, FileOpenMode fileMode, out ulong handle);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_file_close(IntPtr client, ulong handle);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_file_read(IntPtr client, ulong handle, byte[] data, uint length, out uint bytesRead);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_client_free(IntPtr client);
+
+        [DllImport(LibiMobileDevice.LibimobiledeviceDllPath, CallingConvention = CallingConvention.Cdecl)]
+        static extern AFCError afc_dictionary_free(IntPtr dictionary);
+        #endregion
+
+        #region Main Functions
+        public static AFCError CollectData(iDevice device, string savePath)
+        {
+            IntPtr afcClient;
+            AFCError returnCode = afc_client_start_service(device.Handle, out afcClient, "iOSLibDataCollector");
+            if (returnCode != AFCError.AFC_E_SUCCESS || afcClient == IntPtr.Zero)
+            {
+                return returnCode;
+            }
+
+            int fileNumber = 0;
+            string fileName;
+            do
+            {
+                fileName = device.iOSVersion.Replace(".", "_") + (fileNumber != 0 ? " (" + fileNumber + ")" : "");
+                fileNumber++;
+            } while (File.Exists(savePath + @"\" + fileName + ".sqlite")
+                || File.Exists(savePath + @"\" + fileName + ".sqlite-shm")
+                || File.Exists(savePath + @"\" + fileName + ".sqlite-wal")
+                || File.Exists(savePath + @"\" + fileName + ".txt"));
+            savePath += @"\" + fileName;
+
+            StreamWriter treeWriter = new StreamWriter(savePath + ".txt");
+            saveDirectoryTree(afcClient, "", treeWriter);
+            treeWriter.WriteLine("\n\r" + photoDatabasePath);
+            treeWriter.Close();
+
+            if ((returnCode = savePhotosDatabase(afcClient, savePath + ".sqlite")) != AFCError.AFC_E_SUCCESS)
+            {
+                afc_client_free(afcClient);
+                return returnCode;
+            }
+
+            afc_client_free(afcClient);
+            return returnCode;
+        }
+
+        static AFCError saveDirectoryTree(IntPtr afcClient, string directoryPath, StreamWriter streamWirter)
+        {
+            AFCError returnCode;
+            IntPtr directoryListPtr;
+            if ((returnCode = AFC.afc_read_directory(afcClient, directoryPath, out directoryListPtr)) != AFC.AFCError.AFC_E_SUCCESS)
+            {
+                return returnCode;
+            }
+
+            List<string> directoryList = LibiMobileDevice.PtrToStringList(directoryListPtr, 2);
+            afc_dictionary_free(directoryListPtr);
+
+            int tabNumber = directoryPath.Count(x => x == '/');
+            directoryList.Sort();
+            foreach (string currDirectory in directoryList)
+            {
+                if (currDirectory == "Photos.sqlite")
+                {
+                    photoDatabasePath = directoryPath + "/" + currDirectory;
+                }
+
+                streamWirter.WriteLine(String.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
+                saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWirter);
+            }
+
+            return returnCode;
+        }
+
+        static AFCError savePhotosDatabase(IntPtr afcClient, string savePath)
+        {
+            AFCError returnCode;
+            if ((returnCode = saveFile(afcClient, photoDatabasePath, savePath)) != AFCError.AFC_E_SUCCESS)
+            {
+                afc_client_free(afcClient);
+                return returnCode;
+            }
+
+            saveFile(afcClient, photoDatabasePath + "-shm", savePath + "-shm");
+            saveFile(afcClient, photoDatabasePath + "-wal", savePath + "-wal");
+
+            return returnCode;
+        }
+        #endregion
+
+        #region Helper functions
+        static AFCError saveFile(IntPtr afcClient, string filePath, string savePath)
+        {
+            AFCError returnCode;
+            IntPtr fileInfoPtr;
+            if ((returnCode = afc_get_file_info(afcClient, filePath, out fileInfoPtr)) != AFCError.AFC_E_SUCCESS)
+            {
+                return returnCode;
+            }
+
+            List<string> infoList = LibiMobileDevice.PtrToStringList(fileInfoPtr, 0);
+            long fileSize = Convert.ToInt64(infoList[infoList.FindIndex(x => x == "st_size") + 1]);
+            afc_dictionary_free(fileInfoPtr);
+
+            ulong fileHandle;
+            if ((returnCode = afc_file_open(afcClient, filePath, FileOpenMode.AFC_FOPEN_RDONLY, out fileHandle))
+                != AFCError.AFC_E_SUCCESS)
+            {
+                return returnCode;
+            }
+
+            FileStream fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write);
+            const int bufferSize = 4194304;
+            for (int i = 0; i < fileSize / bufferSize + 1; i++)
+            {
+                uint bytesRead;
+
+                long remainder = fileSize - i * bufferSize;
+                int currBufferSize = remainder >= bufferSize ? bufferSize : (int)remainder;
+                byte[] currBuffer = new byte[currBufferSize];
+                if ((returnCode = afc_file_read(afcClient, fileHandle, currBuffer, Convert.ToUInt32(currBufferSize), out bytesRead))
+                    == AFCError.AFC_E_SUCCESS)
+                {
+                    fileStream.Write(currBuffer, 0, currBufferSize);
+                }
+            }
+
+            fileStream.Close();
+            afc_file_close(afcClient, fileHandle);
+
+            return returnCode;
+        }
+        #endregion
+    }
+}
