@@ -89,10 +89,11 @@ namespace iOSLibDataCollector.LibIMobileDevice
             }
 
             int fileNumber = 0;
+            string iOSVersion = device.iOSVersion.Replace(".", "_");
             string fileName;
             do
             {
-                fileName = device.iOSVersion.Replace(".", "_") + (fileNumber != 0 ? " (" + fileNumber + ")" : "");
+                fileName = iOSVersion + (fileNumber != 0 ? " (" + fileNumber + ")" : "");
                 fileNumber++;
             } while (File.Exists(savePath + @"\" + fileName + ".sqlite")
                 || File.Exists(savePath + @"\" + fileName + ".sqlite-shm")
@@ -105,11 +106,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
             treeWriter.WriteLine("\n\r" + photoDatabasePath);
             treeWriter.Close();
 
-            if ((returnCode = savePhotosDatabase(afcClient, savePath + ".sqlite")) != AFCError.AFC_E_SUCCESS)
-            {
-                afc_client_free(afcClient);
-                return returnCode;
-            }
+            returnCode = savePhotosDatabase(afcClient, savePath + ".sqlite");
 
             afc_client_free(afcClient);
             return returnCode;
