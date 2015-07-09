@@ -14,6 +14,8 @@ namespace iOSLibDataCollector
         string[] readDevices;
         string savePath;
 
+        public static StreamWriter logWriter;
+
         public CollectionForm()
         {
             InitializeComponent();
@@ -31,13 +33,14 @@ namespace iOSLibDataCollector
             {
                 if (CollectData() == 0)
                 {
-                    BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Data collected succesfully."; }));
+                    BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Data collected successfully."; }));
                 }
 
                 else
                 {
-                    BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Data collection failed."; }));
+                    BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Data collection failed. Check log for details."; }));
                 }
+                logWriter.Close();
 
                 BeginInvoke(new MethodInvoker(() =>
                 {
@@ -76,10 +79,18 @@ namespace iOSLibDataCollector
                 return 1;
             }
 
-            savePath = savePathBox.Text + @"\iOSData";
+            if (!Directory.Exists(savePath = savePathBox.Text + @"\iOSData"))
+            {
+                Directory.CreateDirectory(savePath);
+            }
+
             deviceList = new List<iDevice>();
             readDevices = getReadDevices();
 
+            logWriter = new StreamWriter(savePath + @"\log.txt");
+
+            logWriter.WriteLine("[INFO] Logging started.");
+            logWriter.WriteLine("[INFO] Searching for devices.");
             BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Searching for iDevices..."; }));
 
             List<iDevice> foundDevices = LibiMobileDevice.GetDevices();
@@ -89,14 +100,16 @@ namespace iOSLibDataCollector
             if (deviceList.Count == 0)
             {
                 MessageBox.Show("No new device found. Please check the connection and if the proper driver is installed! If you want to get data from an already read device, please delete it from 'done.txt'",
-                    "No New Device Found", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-
+                    "No New Device Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                logWriter.WriteLine("[INFO] No new device found. Exiting.");
                 return 0;
             }
+            logWriter.WriteLine("[INFO] Search completed successfully, " + deviceList.Count + " not read device found.");
 
             BeginInvoke(new MethodInvoker(() => { progressBar.Maximum = deviceList.Count * 3; }));
             foreach (iDevice currDevice in deviceList)
             {
+                logWriter.WriteLine("[INFO] Connecting to " + currDevice.Udid + ".");
                 BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Connecting to " + currDevice.Udid + "..."; progressBar.PerformStep(); }));
 
                 LibiMobileDevice.IDeviceError libReturnCode = LibiMobileDevice.NewDevice(out currDevice.Handle, currDevice.Udid);
@@ -105,30 +118,36 @@ namespace iOSLibDataCollector
                 {
                     LibiMobileDevice.FreeDevice(currDevice.Handle);
 
-                    if (MessageBox.Show("Couldn't connect to \"" + currDevice.Name + "\" (" + currDevice.Udid
-                        + "). Do you want to continue data collection from the other devices (if there's any)?",
+                    logWriter.Write("[ERROR] Couldn't connect to " + currDevice.Udid + ". iDevice error code " + (int)libReturnCode + ": " + libReturnCode);
+                    if (MessageBox.Show("Couldn't connect to " + currDevice.Udid + ". Do you want to continue data collection from other devices (if there's any)?",
                         "Connection Failed", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.No)
                     {
+                        logWriter.WriteLine(" Exiting.");
                         return 1;
                     }
 
                     else
                     {
+                        logWriter.WriteLine(" Continue collecting from other devices (if there's any).");
                         continue;
                     }
                 }
+                logWriter.WriteLine("[INFO] Successfully connected to " + currDevice.Udid + ".");
 
+                logWriter.WriteLine("[INFO] Getting properties of " + currDevice.Udid + ".");
                 if (Lockdown.getDeviceProperties(currDevice) != Lockdown.LockdownError.LOCKDOWN_E_SUCCESS)
                 {
                     LibiMobileDevice.FreeDevice(currDevice.Handle);
                     continue;
                 }
+                logWriter.WriteLine("[INFO] Successfully got properties of " + currDevice.Udid + " (" + currDevice.Name + ").");
 
                 if (!Directory.Exists(savePath))
                 {
                     Directory.CreateDirectory(savePath);
                 }
 
+                logWriter.WriteLine("[INFO] Collecting data from " + currDevice.Udid + " (" + currDevice.Name + ").");
                 BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = currDevice.Name + " - Collecting data..."; progressBar.PerformStep(); }));
 
                 AFC.AFCError afcReturnCode = AFC.CollectData(currDevice, savePath);
@@ -137,7 +156,7 @@ namespace iOSLibDataCollector
                     LibiMobileDevice.FreeDevice(currDevice.Handle);
 
                     if (MessageBox.Show("Couldn't save data from \"" + currDevice.Name + "\" (" + currDevice.Udid +
-                        "). Please search for Photos.sqlite and copy manually (somewhere in 'var/mobile/Media/' folder). Do you want to continue data collection from the other devices (if there's any)?",
+                        "). Please search for Photos.sqlite and copy manually (somewhere in 'var/mobile/Media/' folder). Do you want to continue data collection from other devices (if there's any)?",
                         "Couldn't Find Database", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.No)
                     {
                         return 1;
@@ -145,10 +164,10 @@ namespace iOSLibDataCollector
 
                     else
                     {
-
                         continue;
                     }
                 }
+                logWriter.WriteLine("[INFO] Data has been collected successfully from " + currDevice.Udid + " (" + currDevice.Name + "). Device has been added to done.txt.");
 
                 BeginInvoke(new MethodInvoker(() => { progressBar.PerformStep(); }));
 
@@ -168,7 +187,7 @@ namespace iOSLibDataCollector
                 doneDeviceWriter.Close();
             }
 
-            MessageBox.Show("All data has been collected succesfully to " + savePath + ".", "Collection Succesful",
+            MessageBox.Show("All data has been collected successfully to " + savePath + ".", "Collection Successful",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }

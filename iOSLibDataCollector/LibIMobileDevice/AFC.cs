@@ -81,12 +81,15 @@ namespace iOSLibDataCollector.LibIMobileDevice
         #region Main Functions
         public static AFCError CollectData(iDevice device, string savePath)
         {
+            CollectionForm.logWriter.WriteLine("[INFO] Starting AFC client.");
             IntPtr afcClient;
             AFCError returnCode = afc_client_start_service(device.Handle, out afcClient, "iOSLibDataCollector");
             if (returnCode != AFCError.AFC_E_SUCCESS || afcClient == IntPtr.Zero)
             {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't start AFC client. AFC error " + (int)returnCode + ": " + returnCode + ".");
                 return returnCode;
             }
+            CollectionForm.logWriter.WriteLine("[INFO] AFC client has been successfully started.");
 
             int fileNumber = 0;
             string iOSVersion = device.iOSVersion.Replace(".", "_");
@@ -102,21 +105,49 @@ namespace iOSLibDataCollector.LibIMobileDevice
             savePath += @"\" + fileName;
 
             StreamWriter treeWriter = new StreamWriter(savePath + ".txt");
-            saveDirectoryTree(afcClient, "", treeWriter);
+
+            CollectionForm.logWriter.WriteLine("[INFO] Saving directory tree.");
+            photoDatabasePath = "";
+            string lastDirectory;
+            if ((returnCode = saveDirectoryTree(afcClient, "", treeWriter, out lastDirectory)) != AFCError.AFC_E_SUCCESS)
+            {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't save directory tree. An error occurred while reading \"" + lastDirectory
+                    + "\". AFC error " + (int)returnCode + ": " + returnCode + ".");
+            }
+            CollectionForm.logWriter.WriteLine("[INFO] Directory tree has been saved successfully.");
+
+            if (photoDatabasePath != "")
+            {
+                CollectionForm.logWriter.WriteLine("[INFO] Photos database file is located at " + photoDatabasePath + ".");
+            }
+
+            else
+            {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't find photo database file.");
+            }
+
             treeWriter.WriteLine("\n\r" + photoDatabasePath);
             treeWriter.Close();
 
+            CollectionForm.logWriter.WriteLine("[INFO] Saving photos database.");
             returnCode = savePhotosDatabase(afcClient, savePath + ".sqlite");
 
             afc_client_free(afcClient);
             return returnCode;
         }
 
-        static AFCError saveDirectoryTree(IntPtr afcClient, string directoryPath, StreamWriter streamWirter)
+        static AFCError saveDirectoryTree(IntPtr afcClient, string directoryPath, StreamWriter streamWirter, out string lastDirectory)
         {
+            lastDirectory = directoryPath;
+
             AFCError returnCode;
             IntPtr directoryListPtr;
-            if ((returnCode = AFC.afc_read_directory(afcClient, directoryPath, out directoryListPtr)) != AFC.AFCError.AFC_E_SUCCESS)
+            returnCode = AFC.afc_read_directory(afcClient, directoryPath, out directoryListPtr);
+            if (returnCode == AFCError.AFC_E_READ_ERROR)
+            {
+                return AFCError.AFC_E_SUCCESS;
+            }
+            else if (returnCode != AFCError.AFC_E_SUCCESS)
             {
                 return returnCode;
             }
@@ -134,7 +165,11 @@ namespace iOSLibDataCollector.LibIMobileDevice
                 }
 
                 streamWirter.WriteLine(String.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
-                saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWirter);
+                if ((returnCode = saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWirter, out lastDirectory))
+                    != AFCError.AFC_E_SUCCESS)
+                {
+                    break;
+                }
             }
 
             return returnCode;
@@ -145,9 +180,11 @@ namespace iOSLibDataCollector.LibIMobileDevice
             AFCError returnCode;
             if ((returnCode = saveFile(afcClient, photoDatabasePath, savePath)) != AFCError.AFC_E_SUCCESS)
             {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't save photos database. AFC error " + (int)returnCode + ": " + returnCode + ".");
                 afc_client_free(afcClient);
                 return returnCode;
             }
+            CollectionForm.logWriter.WriteLine("[INFO] Photos database has been saved successfully.");
 
             saveFile(afcClient, photoDatabasePath + "-shm", savePath + "-shm");
             saveFile(afcClient, photoDatabasePath + "-wal", savePath + "-wal");

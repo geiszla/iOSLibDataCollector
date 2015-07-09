@@ -80,21 +80,28 @@ namespace iOSLibDataCollector.LibIMobileDevice
         {
             result = new XDocument();
 
+            CollectionForm.logWriter.WriteLine("[INFO] Connecting to lockdown client.");
             IntPtr lockdownClient;
             LockdownError returnCode = Lockdown.lockdownd_client_new_with_handshake(device.Handle, out lockdownClient, "CycriptGUI");
             if (returnCode != LockdownError.LOCKDOWN_E_SUCCESS || lockdownClient == IntPtr.Zero)
             {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't connect to lockdown client. Lockdown error code " + (int)returnCode + ": " + returnCode + ".");
                 return returnCode;
             }
+            CollectionForm.logWriter.WriteLine("[INFO] Successfully connected to lockdown client.");
 
+            CollectionForm.logWriter.WriteLine("[INFO] Getting data from lockdown client.");
             IntPtr resultPlist;
             if ((returnCode = lockdownd_get_value(lockdownClient, null, null, out resultPlist)) != LockdownError.LOCKDOWN_E_SUCCESS
                 || resultPlist == IntPtr.Zero)
             {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't get data from lockdown client. Lockdown error code " + (int)returnCode + ": " + returnCode + ".");
                 lockdownd_client_free(lockdownClient);
                 return returnCode;
             }
+            CollectionForm.logWriter.WriteLine("[INFO] Data has been successfully got from lockdown client.");
 
+            CollectionForm.logWriter.WriteLine("[INFO] Converting properties list to xml format.");
             try
             {
                 result = LibiMobileDevice.PlistToXml(resultPlist);
@@ -102,9 +109,11 @@ namespace iOSLibDataCollector.LibIMobileDevice
 
             catch
             {
+                CollectionForm.logWriter.WriteLine("[ERROR] Couldn't convert returned data from plist to xml format.");
                 lockdownd_client_free(lockdownClient);
                 return LockdownError.LOCKDOWN_E_UNKNOWN_ERROR;
             }
+            CollectionForm.logWriter.WriteLine("[INFO] Successfully converted plist to xml.");
 
             lockdownd_client_free(lockdownClient);
             return returnCode;
