@@ -40,6 +40,7 @@ namespace iOSLibDataCollector
                 {
                     BeginInvoke(new MethodInvoker(() => { progressTextBox.Text = "Data collection failed. Check log for details."; }));
                 }
+
                 logWriter.Close();
 
                 BeginInvoke(new MethodInvoker(() =>
@@ -99,9 +100,10 @@ namespace iOSLibDataCollector
 
             if (deviceList.Count == 0)
             {
+                logWriter.WriteLine("[INFO] No new device found. Exiting.");
                 MessageBox.Show("No new device found. Please check the connection and if the proper driver is installed! If you want to get data from an already read device, please delete it from 'done.txt'",
                     "No New Device Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                logWriter.WriteLine("[INFO] No new device found. Exiting.");
+
                 return 0;
             }
             logWriter.WriteLine("[INFO] Search completed successfully, " + deviceList.Count + " not read device found.");

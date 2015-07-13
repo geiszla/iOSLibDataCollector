@@ -109,12 +109,12 @@ namespace iOSLibDataCollector.LibIMobileDevice
             CollectionForm.logWriter.WriteLine("[INFO] Saving directory tree.");
             photoDatabasePath = "";
             string lastDirectory;
-            if ((returnCode = saveDirectoryTree(afcClient, "", treeWriter, out lastDirectory)) != AFCError.AFC_E_SUCCESS)
+            if ((returnCode = saveDirectoryTree(afcClient, "/", treeWriter, out lastDirectory)) != AFCError.AFC_E_SUCCESS)
             {
                 CollectionForm.logWriter.WriteLine("[ERROR] Couldn't save directory tree. An error occurred while reading \"" + lastDirectory
                     + "\". AFC error " + (int)returnCode + ": " + returnCode + ".");
             }
-            CollectionForm.logWriter.WriteLine("[INFO] Directory tree has been saved successfully.");
+            CollectionForm.logWriter.WriteLine("[INFO] Directory saving has been finished.");
 
             if (photoDatabasePath != "")
             {
@@ -136,7 +136,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
             return returnCode;
         }
 
-        static AFCError saveDirectoryTree(IntPtr afcClient, string directoryPath, StreamWriter streamWirter, out string lastDirectory)
+        static AFCError saveDirectoryTree(IntPtr afcClient, string directoryPath, StreamWriter streamWriter, out string lastDirectory)
         {
             lastDirectory = directoryPath;
 
@@ -155,6 +155,11 @@ namespace iOSLibDataCollector.LibIMobileDevice
             List<string> directoryList = LibiMobileDevice.PtrToStringList(directoryListPtr, 2);
             afc_dictionary_free(directoryListPtr);
 
+            if (directoryPath == "/")
+            {
+                directoryPath = "";
+            }
+
             int tabNumber = directoryPath.Count(x => x == '/');
             directoryList.Sort();
             foreach (string currDirectory in directoryList)
@@ -164,8 +169,8 @@ namespace iOSLibDataCollector.LibIMobileDevice
                     photoDatabasePath = directoryPath + "/" + currDirectory;
                 }
 
-                streamWirter.WriteLine(String.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
-                if ((returnCode = saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWirter, out lastDirectory))
+                streamWriter.WriteLine(String.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
+                if ((returnCode = saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWriter, out lastDirectory))
                     != AFCError.AFC_E_SUCCESS)
                 {
                     break;
