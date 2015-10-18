@@ -82,7 +82,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
 
             CollectionForm.logWriter.WriteLine("[INFO] Connecting to lockdown client.");
             IntPtr lockdownClient;
-            LockdownError returnCode = Lockdown.lockdownd_client_new_with_handshake(device.Handle, out lockdownClient, "CycriptGUI");
+            LockdownError returnCode = lockdownd_client_new_with_handshake(device.Handle, out lockdownClient, "CycriptGUI");
             if (returnCode != LockdownError.LOCKDOWN_E_SUCCESS || lockdownClient == IntPtr.Zero)
             {
                 CollectionForm.logWriter.WriteLine("[ERROR] Couldn't connect to lockdown client. Lockdown error code " + (int)returnCode + ": " + returnCode + ".");

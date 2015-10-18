@@ -142,7 +142,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
 
             AFCError returnCode;
             IntPtr directoryListPtr;
-            returnCode = AFC.afc_read_directory(afcClient, directoryPath, out directoryListPtr);
+            returnCode = afc_read_directory(afcClient, directoryPath, out directoryListPtr);
             if (returnCode == AFCError.AFC_E_READ_ERROR)
             {
                 return AFCError.AFC_E_SUCCESS;
@@ -169,7 +169,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
                     photoDatabasePath = directoryPath + "/" + currDirectory;
                 }
 
-                streamWriter.WriteLine(String.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
+                streamWriter.WriteLine(string.Concat(Enumerable.Repeat("\t", tabNumber)) + currDirectory);
                 if ((returnCode = saveDirectoryTree(afcClient, directoryPath + "/" + currDirectory, streamWriter, out lastDirectory))
                     != AFCError.AFC_E_SUCCESS)
                 {

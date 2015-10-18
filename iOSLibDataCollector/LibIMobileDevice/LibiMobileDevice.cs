@@ -42,7 +42,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
         {
             IntPtr devicesPtr;
             IntPtr countPtr;
-            LibiMobileDevice.IDeviceError returnCode = LibiMobileDevice.idevice_get_device_list(out devicesPtr, out countPtr);
+            IDeviceError returnCode = idevice_get_device_list(out devicesPtr, out countPtr);
 
             List<iDevice> devices = new List<iDevice>();
             if (Marshal.ReadInt32(devicesPtr) != 0)
@@ -55,7 +55,7 @@ namespace iOSLibDataCollector.LibIMobileDevice
                     i = i + 4;
                 }
 
-                LibiMobileDevice.idevice_device_list_free(devicesPtr);
+                idevice_device_list_free(devicesPtr);
             }
 
             return devices;
